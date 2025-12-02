@@ -1,0 +1,31 @@
+# --- Python 기본 ---
+__pycache__/
+*.py[cod]
+*.class
+
+# --- 가상환경 (필수) ---
+# 사용하시는 가상환경 이름이 다를 수 있어 일반적인 것들을 다 넣었습니다
+venv/
+env/
+.venv/
+.env
+
+# --- VS Code 설정 ---
+.vscode/
+*.code-workspace
+
+# --- AWS 및 보안 (boto3, cryptography 관련) ---
+# 클라우드 키나 인증서가 실수로 올라가지 않게 막습니다
+*.pem
+*.key
+.aws/
+secrets.json
+config.ini
+
+# --- 로그 및 데이터베이스 ---
+*.log
+*.sqlite3
+
+# --- OS 관련 파일 ---
+.DS_Store
+Thumbs.db

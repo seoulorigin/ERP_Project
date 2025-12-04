@@ -16,6 +16,11 @@ payload = {
 
 emp_id = 1
 
+update_data = {
+    "department": "Finance",
+    "position": "Director"
+}
+
 # 직원 등록
 def register():
     print("[직원 등록]")
@@ -44,8 +49,17 @@ def detail():
     else:
         print("Error")
 
+def adjust():
+    print("[직원 수정]")
+    res = requests.put(EMP_URL + f"/{emp_id}", json=update_data)
+    if res.status_code == 200:
+        print(res.json())
+    else:
+        print("Error")
+
 
 if __name__ == "__main__":
     #register()
     #research()
-    detail()
+    #detail()
+    adjust()

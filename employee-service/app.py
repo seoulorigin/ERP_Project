@@ -76,5 +76,27 @@ class EmployeeDetail(Resource):
         result['created_at'] = str(result['created_at'])
         return result, 200
 
+    def put(self, id):
+        data = api.payload
+
+        allowed_keys = {'department', 'position'}
+        input_keys = set(data.keys())
+
+        if not input_keys.issubset(allowed_keys):
+            return {"id": id, "message": "400 Bad Request"}, 400
+
+        conn = get_db_connection()
+        sql = """
+            UPDATE employees
+            SET department = %s, position = %s
+            WHERE id = %s
+        """
+        with conn.cursor() as cur:
+            cur.execute(sql, (data['department'], data['position'], id))
+            conn.commit()
+        cur.close()
+
+        return {"id": id, "message": "200 OK"}, 200
+
 if __name__ == '__main__':
     app.run(port=5001, debug=True)

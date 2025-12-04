@@ -14,6 +14,8 @@ payload = {
     "position": "Manager"
 }
 
+emp_id = 1
+
 # 직원 등록
 def register():
     print("[직원 등록]")
@@ -33,7 +35,17 @@ def research():
     else:
         print("Error")
 
+# 직원 상세 조회
+def detail():
+    print("[직원 상세 조회]")
+    res = requests.get(EMP_URL + f"/{emp_id}")
+    if res.status_code == 200:
+        print(res.json())
+    else:
+        print("Error")
+
 
 if __name__ == "__main__":
     #register()
-    research()
+    #research()
+    detail()

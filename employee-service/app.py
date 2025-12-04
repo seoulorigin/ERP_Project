@@ -10,6 +10,7 @@ parser.add_argument('name', type=str, location='args')
 parser.add_argument('department', type=str, location='args')
 parser.add_argument('position', type=str, location='args')
 
+# TODO: DB 이름 변경
 def get_db_connection():
     return pymysql.connect(
         host='localhost',
@@ -22,7 +23,7 @@ def get_db_connection():
 
 # TODO: 필드 검증 후 INSERT 실행
 @api.route('/employees')
-class Employee(Resource):
+class EmployeeList(Resource):
     def post(self):
         data = request.json
         conn = get_db_connection()
@@ -61,6 +62,19 @@ class Employee(Resource):
             ret.append({"id": row['id'], "name": row['name'], "department": row['department'], "position": row['position']})
 
         return ret, 200
+
+@api.route('/employees/<int:id>')
+class EmployeeDetail(Resource):
+    def get(self, id):
+        conn = get_db_connection()
+        sql = "SELECT * FROM employees WHERE 1=1"
+        with conn.cursor() as cur:
+            sql += " AND id = %s" # %s 자리 표시자
+            cur.execute(sql, (id))
+            result = cur.fetchone()
+        conn.close()
+        result['created_at'] = str(result['created_at'])
+        return result, 200
 
 if __name__ == '__main__':
     app.run(port=5001, debug=True)

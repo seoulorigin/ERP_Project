@@ -14,7 +14,7 @@ payload = {
     "position": "Manager"
 }
 
-emp_id = 1
+emp_id = 2
 
 update_data = {
     "department": "Finance",
@@ -57,9 +57,18 @@ def adjust():
     else:
         print("Error")
 
+def delete():
+    print("[직원 삭제]")
+    res = requests.delete(EMP_URL + f"/{emp_id}")
+    if res.status_code == 204:
+        print("Success")
+    else:
+        print("Error")
+
 
 if __name__ == "__main__":
     #register()
     #research()
     #detail()
-    adjust()
+    #adjust()
+    delete()

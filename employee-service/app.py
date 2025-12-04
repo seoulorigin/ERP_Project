@@ -96,7 +96,17 @@ class EmployeeDetail(Resource):
             conn.commit()
         cur.close()
 
-        return {"id": id, "message": "200 OK"}, 200
+        return 200
+
+    def delete(self, id):
+        conn = get_db_connection()
+        sql = "DELETE FROM employees WHERE id = %s"
+        with conn.cursor() as cur:
+            cur.execute(sql, (id,))
+            conn.commit()
+        cur.close()
+
+        return {'message': f"id: {id} DELETE SUCCESS"}, 204
 
 if __name__ == '__main__':
     app.run(port=5001, debug=True)

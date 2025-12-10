@@ -3,7 +3,7 @@
 import grpc
 import warnings
 
-import approval_pb2 as approval__pb2
+import approval_pb2 as proto_dot_approval__pb2
 
 GRPC_GENERATED_VERSION = '1.76.0'
 GRPC_VERSION = grpc.__version__
@@ -18,7 +18,7 @@ except ImportError:
 if _version_not_supported:
     raise RuntimeError(
         f'The grpc package installed is at version {GRPC_VERSION},'
-        + ' but the generated code in approval_pb2_grpc.py depends on'
+        + ' but the generated code in proto/approval_pb2_grpc.py depends on'
         + f' grpcio>={GRPC_GENERATED_VERSION}.'
         + f' Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}'
         + f' or downgrade your generated code using grpcio-tools<={GRPC_VERSION}.'
@@ -37,13 +37,13 @@ class ApprovalStub(object):
         """
         self.RequestApproval = channel.unary_unary(
                 '/approval.Approval/RequestApproval',
-                request_serializer=approval__pb2.ApprovalRequest.SerializeToString,
-                response_deserializer=approval__pb2.ApprovalResponse.FromString,
+                request_serializer=proto_dot_approval__pb2.ApprovalRequest.SerializeToString,
+                response_deserializer=proto_dot_approval__pb2.ApprovalResponse.FromString,
                 _registered_method=True)
         self.ReturnApprovalResult = channel.unary_unary(
                 '/approval.Approval/ReturnApprovalResult',
-                request_serializer=approval__pb2.ApprovalResultRequest.SerializeToString,
-                response_deserializer=approval__pb2.ApprovalResultResponse.FromString,
+                request_serializer=proto_dot_approval__pb2.ApprovalResultRequest.SerializeToString,
+                response_deserializer=proto_dot_approval__pb2.ApprovalResultResponse.FromString,
                 _registered_method=True)
 
 
@@ -70,13 +70,13 @@ def add_ApprovalServicer_to_server(servicer, server):
     rpc_method_handlers = {
             'RequestApproval': grpc.unary_unary_rpc_method_handler(
                     servicer.RequestApproval,
-                    request_deserializer=approval__pb2.ApprovalRequest.FromString,
-                    response_serializer=approval__pb2.ApprovalResponse.SerializeToString,
+                    request_deserializer=proto_dot_approval__pb2.ApprovalRequest.FromString,
+                    response_serializer=proto_dot_approval__pb2.ApprovalResponse.SerializeToString,
             ),
             'ReturnApprovalResult': grpc.unary_unary_rpc_method_handler(
                     servicer.ReturnApprovalResult,
-                    request_deserializer=approval__pb2.ApprovalResultRequest.FromString,
-                    response_serializer=approval__pb2.ApprovalResultResponse.SerializeToString,
+                    request_deserializer=proto_dot_approval__pb2.ApprovalResultRequest.FromString,
+                    response_serializer=proto_dot_approval__pb2.ApprovalResultResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -105,8 +105,8 @@ class Approval(object):
             request,
             target,
             '/approval.Approval/RequestApproval',
-            approval__pb2.ApprovalRequest.SerializeToString,
-            approval__pb2.ApprovalResponse.FromString,
+            proto_dot_approval__pb2.ApprovalRequest.SerializeToString,
+            proto_dot_approval__pb2.ApprovalResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -132,8 +132,8 @@ class Approval(object):
             request,
             target,
             '/approval.Approval/ReturnApprovalResult',
-            approval__pb2.ApprovalResultRequest.SerializeToString,
-            approval__pb2.ApprovalResultResponse.FromString,
+            proto_dot_approval__pb2.ApprovalResultRequest.SerializeToString,
+            proto_dot_approval__pb2.ApprovalResultResponse.FromString,
             options,
             channel_credentials,
             insecure,

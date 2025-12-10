@@ -74,6 +74,8 @@ class RequestServicer(approval_pb2_grpc.ApprovalServicer):
         
         # 최신 문서 다시 조회
         doc = collection.find_one({"requestId": request.requestId})
+        if not doc:
+            return approval_pb2.ApprovalResultResponse(status="error")
         
         # 2. 로직 분기: 반려(Rejected)인 경우 [cite: 86]
         if request.status == "rejected":
@@ -81,11 +83,22 @@ class RequestServicer(approval_pb2_grpc.ApprovalServicer):
                 {"requestId": request.requestId}, 
                 {"$set": {"finalStatus": "rejected", "updatedAt": datetime.datetime.now()}} # [cite: 87]
             )
-            # Notification 호출 (가이드 3.2.4 - 2) [cite: 88]
+            
+            # Notification 호출 (가이드 3.2.4 - 2 & 3.4.2 반려 알림 구조) [cite: 88, 132-138]
+            notify_payload = {
+                "requestId": request.requestId,
+                "result": "rejected",
+                "rejectedBy": request.approverId, # 반려한 사람 ID
+                "finalResult": "rejected"
+            }
             try:
-                requests.post(f"{NOTIFICATION_SERVICE_URL}/notify", json={"requestId": request.requestId, "msg": "Rejected"})
-            except:
-                print("Notification Service unavailable")
+                # Notification Service는 targetId와 payload를 요구함
+                requests.post(f"{NOTIFICATION_SERVICE_URL}/notify", json={
+                    "targetId": doc['requesterId'],  # 알림 받을 사람 (기안자)
+                    "payload": notify_payload        # 메시지 내용
+                })
+            except Exception as e:
+                print(f"Notification Service unavailable: {e}")
             
         # 3. 로직 분기: 승인(Approved)인 경우 [cite: 89]
         elif request.status == "approved":
@@ -106,11 +119,20 @@ class RequestServicer(approval_pb2_grpc.ApprovalServicer):
                     {"requestId": request.requestId}, 
                     {"$set": {"finalStatus": "approved", "updatedAt": datetime.datetime.now()}} # [cite: 94]
                 )
-                # Notification 호출 (가이드 3.2.4 - 3) [cite: 95]
+                
+                # Notification 호출 (가이드 3.2.4 - 3 & 3.4.2 승인 알림 구조) [cite: 95, 126-131]
+                notify_payload = {
+                    "requestId": request.requestId,
+                    "result": "approved",
+                    "finalResult": "approved"
+                }
                 try:
-                    requests.post(f"{NOTIFICATION_SERVICE_URL}/notify", json={"requestId": request.requestId, "msg": "Approved"})
-                except:
-                    print("Notification Service unavailable")
+                    requests.post(f"{NOTIFICATION_SERVICE_URL}/notify", json={
+                        "targetId": doc['requesterId'], # 알림 받을 사람 (기안자)
+                        "payload": notify_payload       # 메시지 내용
+                    })
+                except Exception as e:
+                    print(f"Notification Service unavailable: {e}")
 
         return approval_pb2.ApprovalResultResponse(status="success")
 
@@ -121,6 +143,20 @@ def check_user_exists(id):
         return res.status_code == 200
     except:
         return False # Employee Service가 꺼져있으면 없는 것으로 처리
+
+# --- [Helper] MongoDB 문서 JSON 직렬화 ---
+def serialize_doc(doc):
+    if not doc:
+        return None
+    # _id는 JSON 변환 시 오류가 나므로 제거하거나 문자열로 변환
+    if '_id' in doc:
+        del doc['_id']
+    # datetime 객체를 ISO 포맷 문자열로 변환
+    if 'createdAt' in doc and isinstance(doc['createdAt'], datetime.datetime):
+        doc['createdAt'] = doc['createdAt'].isoformat()
+    if 'updatedAt' in doc and isinstance(doc['updatedAt'], datetime.datetime):
+        doc['updatedAt'] = doc['updatedAt'].isoformat()
+    return doc
 
 @api.route('/approvals')
 class Approval(Resource):
@@ -166,6 +202,32 @@ class Approval(Resource):
         send_to_processing(doc)
         
         return {"requestId": req_id}, 201
+
+    def get(self):
+        # created_at 기준 내림차순 정렬 (최신순)
+        cursor = collection.find({}).sort("createdAt", -1)
+        results = [serialize_doc(doc) for doc in cursor]
+        return results, 200
+
+@api.route('/approvals/<int:request_id>')
+class ApprovalDetail(Resource):
+    # [cite_start][GET] 결재 요청 상세 조회 [cite: 49] (이미지 표 두 번째 행)
+    def get(self, request_id):
+        """특정 requestId에 해당하는 Document 반환"""
+        doc = collection.find_one({"requestId": request_id})
+        
+        if not doc:
+            return {"message": f"Request {request_id} not found."}, 404
+            
+        return serialize_doc(doc), 200
+
+    # [cite_start][DELETE] 결재 요청 삭제 [cite: 49] (이미지 표 세 번째 행)
+    def delete(self, request_id):
+        """기능 없음 (삭제 불가 메시지 반환)"""
+        # 가이드: "기능 없음. 결재자가 Rejected해야만 처리 종료 가능."
+        return {
+            "message": "Deletion is not allowed. The process ends only upon rejection."
+        }, 405  # 405 Method Not Allowed 또는 400 Bad Request
 
 # gRPC 서버 실행 함수
 def serve_grpc():

@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify
-from flask_restx import Api, Resource, reqparse
+from flask_restx import Api, Resource, reqparse, fields
 import pymysql
 
 app = Flask(__name__)
@@ -9,6 +9,12 @@ parser = reqparse.RequestParser()
 parser.add_argument('name', type=str, location='args')
 parser.add_argument('department', type=str, location='args')
 parser.add_argument('position', type=str, location='args')
+
+employee_model = api.model('Employee', {
+    'name': fields.String(required=True, description='Employee Name', example='Kim'),
+    'department': fields.String(required=True, description='Department Name', example='HR'),
+    'position': fields.String(required=True, description='Job Position', example='Manager')
+})
 
 # TODO: DB 이름 변경
 def get_db_connection():
@@ -24,8 +30,21 @@ def get_db_connection():
 # TODO: 필드 검증 후 INSERT 실행
 @api.route('/employees')
 class EmployeeList(Resource):
+    @api.expect(employee_model, validate=True)
     def post(self):
         data = request.json
+
+        # [추가] 3. 수동 검증 로직 (빈 문자열 또는 공백 체크)
+        # validate=True는 키의 존재 여부는 확인하지만, 빈 문자열("")은 통과시킬 수 있으므로 추가 검증
+        if not data.get('name') or not str(data['name']).strip():
+            return {"message": "'name' field is required and cannot be empty."}, 400
+            
+        if not data.get('department') or not str(data['department']).strip():
+            return {"message": "'department' field is required and cannot be empty."}, 400
+            
+        if not data.get('position') or not str(data['position']).strip():
+            return {"message": "'position' field is required and cannot be empty."}, 400
+
         conn = get_db_connection()
         with conn.cursor() as cur:
             sql = "INSERT INTO employees (name, department, position) VALUES (%s, %s, %s)"

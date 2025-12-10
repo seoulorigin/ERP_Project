@@ -1,82 +1,108 @@
 import asyncio
 import websockets
 import json
-from flask import Flask, request
 import threading
+import sys
+import traceback
+from flask import Flask, request, jsonify
+from flask_restx import Api, Resource, fields
+from urllib.parse import urlparse, parse_qs
 
-# Flask 앱 (내부 서비스 트리거용)
 app = Flask(__name__)
-connected_clients = {} # {employeeId: websocket}
+api = Api(app)
+ns = api.namespace('notify', description='Notification operations')
 
-# 전역 이벤트 루프 생성 (Flask 라우트에서 접근하기 위함)
-loop = asyncio.new_event_loop()
+connected_clients = {}
+ws_loop = None
 
-async def ws_handler(websocket):
-    # path 인자 제거 (최신 websockets 버전 호환)
+notification_model = api.model('Notification', {
+    'targetId': fields.String(required=True, description='Target Employee ID'),
+    'payload': fields.Raw(required=True, description='Payload')
+})
+
+# --- WebSocket Server ---
+async def handler(websocket):
+    # [수정됨] 최신 버전 호환성 수정 (websocket.path -> websocket.request.path)
     try:
-        # URL 파라미터 파싱 로직 (수동 처리)
-        # path 속성은 websocket.request.path 등을 통해 접근 가능하지만,
-        # 최신 버전에서는 핸들러 시그니처가 변경되었습니다.
-        # 간단하게 구현하기 위해 현재는 모든 접속을 허용하고 메시지 대기
-        
-        # 실제 구현 시에는 path나 header를 통해 ID를 식별해야 함
-        # 여기서는 테스트 편의상 1번 ID로 고정하거나 로직을 단순화합니다.
-        
-        # 예시: 접속하자마자 ID를 보내게 하거나, URL 쿼리를 파싱
-        # 여기서는 간단히 path 파싱을 시도
         path = websocket.request.path
-        query = path.split('?')
-        if len(query) > 1:
-            params = query[1].split('=')
-            if params[0] == 'id':
-                emp_id = int(params[1])
-                connected_clients[emp_id] = websocket
-                print(f"Client {emp_id} connected")
-                await websocket.wait_closed()
-        else:
-             # ID가 없으면 그냥 닫기 (테스트 시 주의)
-             await websocket.wait_closed()
-             
+    except AttributeError:
+        # 혹시 모를 구버전 호환성을 위해 예외 처리
+        path = getattr(websocket, 'path', '/')
+
+    print(f"\n[WS Debug] Connection attempt from: {path}")
+    
+    try:
+        parsed_url = urlparse(path)
+        params = parse_qs(parsed_url.query)
+        
+        # ID 추출
+        raw_id = params.get('id', [None])[0]
+        
+        if not raw_id:
+            print(f"[WS Debug] Rejected: No 'id' parameter found")
+            await websocket.close()
+            return
+
+        user_id = str(raw_id)
+        
+        connected_clients[user_id] = websocket
+        print(f"[WS] User connected: '{user_id}'")
+        print(f"[WS] Current Clients: {list(connected_clients.keys())}")
+        
+        # 연결 유지 루프
+        async for message in websocket:
+            pass 
+            
     except Exception as e:
-        print(f"Connection Error: {e}")
+        print(f"[WS Error] Internal Server Error: {e}")
+        traceback.print_exc()
+        
     finally:
-        # 연결 종료 시 처리 (필요하면 추가)
-        pass
+        if 'user_id' in locals() and user_id in connected_clients:
+            del connected_clients[user_id]
+        print(f"[WS] Connection closed/cleaned up")
 
-@app.route('/notify', methods=['POST'])
-def trigger_notification():
-    data = request.json
-    # 테스트를 위해 Requester ID를 1로 가정
-    target_id = 1 
+async def start_server():
+    global ws_loop
+    ws_loop = asyncio.get_running_loop()
     
-    if target_id in connected_clients:
-        ws = connected_clients[target_id]
-        msg = json.dumps(data)
-        
-        # 메인 스레드(Flask)에서 별도 스레드(WebSocket 루프)로 작업 전달
-        asyncio.run_coroutine_threadsafe(ws.send(msg), loop)
-        return "Notification Sent", 200
-        
-    return "Target not connected", 200
+    PORT = 8081
+    print(f"Notification WebSocket Server running on port {PORT}...")
+    # 0.0.0.0으로 열어서 외부 접속 허용
+    async with websockets.serve(handler, "0.0.0.0", PORT):
+        await asyncio.Future()
 
-# WebSocket 서버 시작 로직 (수정됨)
-def start_ws():
+def run_ws_in_thread():
+    loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    
-    async def run_server():
-        # 비동기 컨텍스트 매니저 사용 (최신 방식)
-        async with websockets.serve(ws_handler, "0.0.0.0", 8085):
-            print("WebSocket Server started on port 8085")
-            await asyncio.Future()  # 영원히 대기 (서버 유지)
+    loop.run_until_complete(start_server())
 
-    # 루프 실행
-    loop.run_until_complete(run_server())
+# --- HTTP API ---
+@ns.route('')
+class NotificationResource(Resource):
+    @ns.expect(notification_model)
+    def post(self):
+        data = request.json
+        target_id = str(data.get('targetId'))
+        payload = data.get('payload')
+
+        print(f"\n[HTTP] Sending to User: '{target_id}'")
+        
+        if target_id in connected_clients:
+            ws = connected_clients[target_id]
+            message = json.dumps(payload)
+            
+            if ws_loop:
+                asyncio.run_coroutine_threadsafe(ws.send(message), ws_loop)
+                return {"status": "sent", "targetId": target_id}, 200
+        
+        # 디버깅용 로그: 현재 누구누구 접속해 있는지 출력
+        print(f"[HTTP] User '{target_id}' not connected. (Current: {list(connected_clients.keys())})")
+        return {"status": "skipped", "reason": "User not connected"}, 200
 
 if __name__ == '__main__':
-    # 데몬 스레드로 실행하여 메인 프로세스 종료 시 함께 종료되도록 설정
-    t = threading.Thread(target=start_ws, daemon=True)
+    t = threading.Thread(target=run_ws_in_thread)
+    t.daemon = True
     t.start()
     
-    # Flask 실행
-    app.run(port=5004, debug=True, use_reloader=False) 
-    # use_reloader=False: 스레드 중복 실행 방지
+    app.run(port=5004, debug=True, use_reloader=False)
